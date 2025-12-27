@@ -112,9 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         docsToRender.forEach(doc => {
             const card = document.createElement('div');
             card.className = 'doc-card';
+            // Unique ID for the container to inject thumbnail
+            const thumbId = `thumb-${doc.id}`.replace(/[^a-zA-Z0-9-_]/g, '');
+
             card.innerHTML = `
-                <div class="doc-preview">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><text x="12" y="18" text-anchor="middle" font-size="6" font-weight="bold" fill="currentColor">PDF</text></svg>
+                <div class="doc-preview" id="${thumbId}">
+                    <div class="spinner"></div> <!-- Loading state -->
                 </div>
                 <div class="doc-info">
                     <h4>${doc.name}</h4>
@@ -123,7 +126,53 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             card.addEventListener('click', () => openViewer(doc));
             documentsGrid.appendChild(card);
+
+            // Generate Thumbnail
+            generateThumbnail(doc, thumbId);
         });
+    }
+
+    async function generateThumbnail(doc, containerId) {
+        try {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const loadingTask = pdfjsLib.getDocument(doc.url);
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+
+            // Desired thumbnail dimensions
+            const desiredWidth = 200;
+            const viewport = page.getViewport({ scale: 1 });
+            const scale = desiredWidth / viewport.width;
+            const scaledViewport = page.getViewport({ scale: scale });
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = scaledViewport.height;
+            canvas.width = scaledViewport.width;
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: scaledViewport
+            };
+
+            await page.render(renderContext).promise;
+
+            // Replace spinner with canvas
+            container.innerHTML = '';
+            container.appendChild(canvas);
+
+        } catch (error) {
+            console.error('Error generating thumbnail for', doc.name, error);
+            // Fallback to icon
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><text x="12" y="18" text-anchor="middle" font-size="6" font-weight="bold" fill="currentColor">PDF</text></svg>
+                `;
+            }
+        }
     }
 
     function openModal(modal) {
